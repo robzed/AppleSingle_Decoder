@@ -25,6 +25,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from __future__ import print_function       # (been writing too much Python 3 to stop)
+
 import sys
 import struct
 import cStringIO
@@ -41,7 +43,7 @@ def read_data(file, message, dlen, type):
         sys.exit(1)
     (value,) = struct.unpack(type, chunk)
 
-    if verbose: print message, "=", hex(value)
+    if verbose: print(message, "=", hex(value))
     return value
 
 def read_uint(file, message):
@@ -96,6 +98,7 @@ MS-DOS file information, attributes, and so on AFP short name
 AFP file information, attributes, and so on
 AFP directory ID"""
 ]
+
 #
 #
 #
@@ -116,19 +119,29 @@ def scan_directory(directory):
         for name in files:
             filepath = os.path.join(root, name)
             if file_might_be_AppleSingle(filepath):
-                print filepath
+                print(filepath)
     
-    """
-    contents = os.listdir(directory)
-    for item in contents:
-        print item
-        if os.path.isdir(item):
-            scan_directory(item)
-        else:
-            if file_might_be_AppleSingle(item):
-                print(item)
-    """
+def extract_fork(element_type, data, output_filename, entry_id_dict):
     
+    if element_type not in entry_id_dict:
+        print("No fork of that type in this file!")
+        sys.exit(1)
+    (offset, length) = entry_id_dict[1]
+    #print(offset, length)
+    datafork = data[offset : length+offset]
+    if len(datafork) != length:
+        print("Internal error - Length of extraction not correct")
+        sys.exit(1)
+    
+    print("Header bytes:")
+    (b1, b2, b3, b4, b5, b6, b7, b8) = struct.unpack("BBBBBBBB", datafork[0:8])
+    print("  ", hex(b1), hex(b2), hex(b3), hex(b4), hex(b5), hex(b6), hex(b7), hex(b8))
+    #print("Len =", len(datafork))
+    print("Length =", length)
+    
+    with open(out, 'wb') as output_filename:
+        output_f.write(datafork)
+
 def main():
     global verbose
     
@@ -159,6 +172,8 @@ def main():
         print("  verbose <filename>")
         print("  list <path>")
         print("extract_datafork <filename_in> <filename_out>")
+        print("extract_resfork <filename_in> <filename_out>")
+        print("extract_both_forks <filename_in> <filename_out>   (NOTE: .resource_fork will be appended to filename_out for the resource fork")
         sys.exit(1)
     
     with open(filename, 'rb') as f:
@@ -182,23 +197,23 @@ def main():
             if verbose: print("--------------------------------")
             entry_id = read_uint(f, "entry_id")
             if entry_id == 0:
-                print "Entry ID cannot be 0"
+                print("Entry ID cannot be 0")
                 sys.exit(1)
             if entry_id in entry_IDs:
-                print "Entry ID not in type table"
+                print("Entry ID not in type table")
                 sys.exit(1)
             offset = read_uint(f, "offset")
             length = read_uint(f, "length")
             
             (name, id) = entry_IDs[entry_id]
             if id != entry_id:
-                print "Internal error entry ids"
+                print("Internal error entry ids")
                 sys.exit(1) 
                 
-            if verbose: print"Block Name:", name
+            if verbose: print("Block Name:", name)
             
             if entry_id in entry_id_dict:
-                print "Entry ID already existed in this AppleSingle", entry_id
+                print("Entry ID already existed in this AppleSingle", entry_id)
                 sys.exit(1)
             
             entry_id_dict[entry_id] = (offset, length)
@@ -220,24 +235,12 @@ def main():
         if mode == "verify":
             pass
         elif mode == "extract_datafork":
-            if 1 not in entry_id_dict:
-                print "No datafork in this file!"
-                sys.exit(1)
-            (offset, length) = entry_id_dict[1]
-            #print offset, length
-            datafork = data[offset : length+offset]
-            if len(datafork) != length:
-                print "Internal error - Length of extraction not correct"
-                sys.exit(1)
-            
-            print("Header bytes:")
-            (b1, b2, b3, b4, b5, b6, b7, b8) = struct.unpack("BBBBBBBB", datafork[0:8])
-            print "  ", hex(b1), hex(b2), hex(b3), hex(b4), hex(b5), hex(b6), hex(b7), hex(b8)
-            #print "Len =", len(datafork)
-            print "Length =", length
-            
-            with open(out, 'wb') as output_f:
-                output_f.write(datafork)
+            extract_fork(1, data, output_f, entry_id_dict)
+        elif mode == "extract_resfork":
+            extract_fork(2, data, output_f, entry_id_dict)
+        elif mode == "extract_both_forks":
+            extract_fork(1, data, output_f, entry_id_dict)
+            extract_fork(2, data, output_f+".resource_fork", entry_id_dict)
             
         else:
             print("Unknown mode:", mode)
