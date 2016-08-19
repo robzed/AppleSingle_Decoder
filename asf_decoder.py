@@ -28,6 +28,7 @@
 import sys
 import struct
 import cStringIO
+import os
 
 verbose = False
 
@@ -98,7 +99,36 @@ AFP directory ID"""
 #
 #
 #
+def file_might_be_AppleSingle(filename):
+    with open(filename, 'rb') as f:
+        data = f.read(4)
+        if len(data) < 4:
+            return False
+        (magic,) = struct.unpack(">I", data)
+        if magic == 0x51600:
+            return True
+        
+    return False
 
+
+def scan_directory(directory):
+    for root, dirs, files in os.walk(directory):
+        for name in files:
+            filepath = os.path.join(root, name)
+            if file_might_be_AppleSingle(filepath):
+                print filepath
+    
+    """
+    contents = os.listdir(directory)
+    for item in contents:
+        print item
+        if os.path.isdir(item):
+            scan_directory(item)
+        else:
+            if file_might_be_AppleSingle(item):
+                print(item)
+    """
+    
 def main():
     global verbose
     
@@ -109,8 +139,13 @@ def main():
     elif len(sys.argv) == 3:
         mode = sys.argv[1]
         filename = sys.argv[2]
+        if mode == "list":
+            print("Files that might be AppleSingle:")
+            scan_directory(filename)
+            return
+        
         if mode != "verbose":
-            print("Verbose only supported with input filename only")
+            print("Verbose or list only supported with input filename only")
             sys.exit(1)
         mode = "verify"
         verbose = True
@@ -122,6 +157,7 @@ def main():
         print("Possible arguments:")
         print("  <filename>")
         print("  verbose <filename>")
+        print("  list <path>")
         print("extract_datafork <filename_in> <filename_out>")
         sys.exit(1)
     
