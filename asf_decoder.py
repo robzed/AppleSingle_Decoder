@@ -99,83 +99,7 @@ AFP file information, attributes, and so on
 AFP directory ID"""
 ]
 
-#
-#
-#
-def file_might_be_AppleSingle(filename):
-    with open(filename, 'rb') as f:
-        data = f.read(4)
-        if len(data) < 4:
-            return False
-        (magic,) = struct.unpack(">I", data)
-        if magic == 0x51600:
-            return True
-        
-    return False
-
-
-def scan_directory(directory):
-    for root, dirs, files in os.walk(directory):
-        for name in files:
-            filepath = os.path.join(root, name)
-            if file_might_be_AppleSingle(filepath):
-                print(filepath)
-    
-def extract_fork(element_type, data, output_filename, entry_id_dict):
-    
-    if element_type not in entry_id_dict:
-        print("No fork of that type in this file!")
-        sys.exit(1)
-    (offset, length) = entry_id_dict[1]
-    #print(offset, length)
-    datafork = data[offset : length+offset]
-    if len(datafork) != length:
-        print("Internal error - Length of extraction not correct")
-        sys.exit(1)
-    
-    print("Header bytes:")
-    (b1, b2, b3, b4, b5, b6, b7, b8) = struct.unpack("BBBBBBBB", datafork[0:8])
-    print("  ", hex(b1), hex(b2), hex(b3), hex(b4), hex(b5), hex(b6), hex(b7), hex(b8))
-    #print("Len =", len(datafork))
-    print("Length =", length)
-    
-    with open(out, 'wb') as output_filename:
-        output_f.write(datafork)
-
-def main():
-    global verbose
-    
-    if len(sys.argv) == 4:
-        mode = sys.argv[1]
-        filename = sys.argv[2]
-        out = sys.argv[3]
-    elif len(sys.argv) == 3:
-        mode = sys.argv[1]
-        filename = sys.argv[2]
-        if mode == "list":
-            print("Files that might be AppleSingle:")
-            scan_directory(filename)
-            return
-        
-        if mode != "verbose":
-            print("Verbose or list only supported with input filename only")
-            sys.exit(1)
-        mode = "verify"
-        verbose = True
-    elif len(sys.argv) == 2: 
-        mode = "verify"
-        filename = sys.argv[1]
-    else:
-        print("No filename supplied")
-        print("Possible arguments:")
-        print("  <filename>")
-        print("  verbose <filename>")
-        print("  list <path>")
-        print("extract_datafork <filename_in> <filename_out>")
-        print("extract_resfork <filename_in> <filename_out>")
-        print("extract_both_forks <filename_in> <filename_out>   (NOTE: .resource_fork will be appended to filename_out for the resource fork")
-        sys.exit(1)
-    
+def convert_one_file (filename, mode, output_f):
     with open(filename, 'rb') as f:
         data = f.read()
       
@@ -244,7 +168,98 @@ def main():
             
         else:
             print("Unknown mode:", mode)
-        sys.exit(0)
+            
+
+#
+#
+#
+def file_might_be_AppleSingle(filename):
+    with open(filename, 'rb') as f:
+        data = f.read(4)
+        if len(data) < 4:
+            return False
+        (magic,) = struct.unpack(">I", data)
+        if magic == 0x51600:
+            return True
+        
+    return False
+
+
+def scan_directory(directory, convert=False):
+    for root, dirs, files in os.walk(directory):
+        for name in files:
+            filepath = os.path.join(root, name)
+            if file_might_be_AppleSingle(filepath):
+                if convert:
+                    print("Converting", filepath)
+                    convert_one_file(filepath, "extract_both_forks", filepath)
+                else:
+                    print(filepath)
+    
+def extract_fork(element_type, data, output_filename, entry_id_dict):
+    
+    if element_type not in entry_id_dict:
+        print("No fork of that type in this file!")
+        sys.exit(1)
+    (offset, length) = entry_id_dict[element_type]
+    #print(offset, length)
+    datafork = data[offset : length+offset]
+    if len(datafork) != length:
+        print("Internal error - Length of extraction not correct")
+        sys.exit(1)
+    
+    print("Header bytes:")
+    (b1, b2, b3, b4, b5, b6, b7, b8) = struct.unpack("BBBBBBBB", datafork[0:8])
+    print("  ", hex(b1), hex(b2), hex(b3), hex(b4), hex(b5), hex(b6), hex(b7), hex(b8))
+    #print("Len =", len(datafork))
+    print("Length =", length)
+    
+    with open(output_filename, 'wb') as output_f:
+        output_f.write(datafork)
+
+
+
+
+def main():
+    global verbose
+    
+    if len(sys.argv) == 4:
+        mode = sys.argv[1]
+        filename = sys.argv[2]
+        out = sys.argv[3]
+    elif len(sys.argv) == 3:
+        mode = sys.argv[1]
+        filename = sys.argv[2]
+        if mode == "list":
+            print("Files that might be AppleSingle:")
+            scan_directory(filename)
+            return
+        if mode == "batch":
+            print("Batch converting directory:")
+            scan_directory(filename, convert=True)
+            return
+        
+        if mode != "verbose":
+            print("Verbose, list or batch only supported with input filename only")
+            sys.exit(1)
+        mode = "verify"
+        verbose = True
+    elif len(sys.argv) == 2: 
+        mode = "verify"
+        filename = sys.argv[1]
+    else:
+        print("No filename supplied")
+        print("Possible arguments:")
+        print("  <filename>")
+        print("  verbose <filename>")
+        print("  list <path>")
+        print("extract_datafork <filename_in> <filename_out>")
+        print("extract_resfork <filename_in> <filename_out>")
+        print("extract_both_forks <filename_in> <filename_out>   (NOTE: .resource_fork will be appended to filename_out for the resource fork")
+        sys.exit(1)
+    
+    convert_one_file(filename, mode, output_f)
+
 
 
 main()
