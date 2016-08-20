@@ -258,7 +258,8 @@ def main():
         print("extract_both_forks <filename_in> <filename_out>   (NOTE: .resource_fork will be appended to filename_out for the resource fork")
         sys.exit(1)
     
-    convert_one_file(filename, mode, output_f)
+    convert_one_file(filename, mode, out)
+
 
 
 
